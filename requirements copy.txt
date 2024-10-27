@@ -1,0 +1,5 @@
+fdc_id,data_type,description,food_category_id,publication_date,food
+2685568,foundation_food,"Squash, summer, green, zucchini, includes skin, raw",11,2024-04-18
+2685569,foundation_food,"Squash, summer, yellow, includes skin, raw",11,2024-04-18
+2685570,foundation_food,"Squash, winter, butternut, raw",11,2024-04-18
+2685571,foundation_food,"Squash, winter, acorn, raw",11,2024-04-18

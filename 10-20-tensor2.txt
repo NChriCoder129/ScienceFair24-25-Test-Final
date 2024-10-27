@@ -1,0 +1,161 @@
+print("FINAL TEST: ")
+import os
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+# class_names = [
+# "NO"
+# "YES"
+# ]
+
+import pandas as pd
+
+#df = pd.DataFrame(data)
+#new_data = pd.read_csv("requirements copy.txt")
+df = pd.read_csv("requiredsev.txt")
+# print(df.columns)
+# print(df)
+
+
+#df['rating'] = df['rating'].astype(int)
+
+features = df['values']
+print("Features: ")
+print(features)
+labels = df['rating']
+print("Labels: ")
+print(labels)
+#print(df)
+
+data = [line.strip() for line in df]
+dataset = tf.data.Dataset.from_tensor_slices(data)
+
+vectorize_layer = tf.keras.layers.TextVectorization(max_tokens=1000, output_mode='int')  # You can adjust max_tokens
+vectorize_layer.adapt(features.values)  # Fit the vectorization layer on the text data
+
+features_vectorized = vectorize_layer(features.values)
+# [[38  6 23 18 52  8 24 47 11 10 46 15 30  8  2 19 34 12 31 35 33 29 28 14
+#    2 41  2 51  2 26 55 40  2 25  5 16  6 50 13 48 37 57 20 44 21 22 13 42
+#   39 54 27  3  4 58 49 53 12  9 32  3  4  5  7 17 43 56 36  9  3  4  5  7
+#   45 10 11]]
+# features_numpy = features_vectorized.numpy()
+# for i in features_numpy:
+#     print(features_numpy[i].item())
+# Split the data into training and test sets
+split_index = int(0.8 * len(df))
+X_train, X_test = features_vectorized[:split_index], features_vectorized[split_index:]
+y_train, y_test = labels[:split_index], labels[split_index:]
+
+# Create TensorFlow datasets
+ds_train = tf.data.Dataset.from_tensor_slices((X_train, y_train)).batch(32)
+ds_test = tf.data.Dataset.from_tensor_slices((X_test, y_test)).batch(32)
+#PRAISE THE LORD WITH ALL YOUR HEART
+
+# Verify the batch of training data
+for features, labels in ds_train.take(1):
+    print("Features:", features)
+    print("Labels:", labels)
+#PRAISE THE LORD WITH ALL YOUR HEART
+
+# No dataset info as with tfds.load, but you can print samples
+print("Training dataset sample:")
+for example in ds_train.take(1):
+    print(example)
+
+print("Test dataset sample:")
+for example in ds_test.take(1):
+    print(example)
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(None,), dtype='int32'),  # Input layer for the vectorized text
+    tf.keras.layers.Embedding(input_dim=1000, output_dim=64),  # Embedding layer
+    tf.keras.layers.GlobalAveragePooling1D(),  # Pooling layer
+    tf.keras.layers.Dense(32, activation='relu'),  # Dense hidden layer
+    tf.keras.layers.Dense(1, activation='sigmoid')  # Output layer for binary classification
+])
+
+####### #######
+
+model.compile(optimizer='adam', loss='mean_absolute_error', metrics=tf.keras.metrics.MeanAbsoluteError())
+
+predictions = model(features)
+predictions[:5]
+
+print("Prediction: {}".format(tf.math.argmax(predictions, axis=1)))
+print("    Labels: {}".format(labels))
+
+loss_object = tf.keras.losses.MeanAbsoluteError() 
+
+def loss(model, x, y, training):
+  # training=training is needed only if there are layers with different
+  # behavior during training versus inference (e.g. Dropout).
+  y_ = model(x, training=training)
+
+  return loss_object(y_true=y, y_pred=y_)
+
+l = loss(model, features, labels, training=False)
+print("Loss test: {}".format(l))
+
+def grad(model, inputs, targets):
+  with tf.GradientTape() as tape:
+    loss_value = loss(model, inputs, targets, training=True)
+  return loss_value, tape.gradient(loss_value, model.trainable_variables)
+
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
+
+loss_value, grads = grad(model, features, labels)
+
+print("Step: {}, Initial Loss: {}".format(optimizer.iterations.numpy(),
+                                          loss_value.numpy()))
+
+optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+print("Step: {},         Loss: {}".format(optimizer.iterations.numpy(),
+                                          loss(model, features, labels, training=True).numpy()))
+
+train_loss_results = []
+train_accuracy_results = []
+
+num_epochs = 10001
+#
+for epoch in range(num_epochs):
+    epoch_loss_avg = tf.keras.metrics.Mean()
+    epoch_accuracy = tf.keras.metrics.MeanAbsoluteError()  # Changed to BinaryAccuracy
+
+    # Training loop - using batches of 32
+    for x, y in ds_train:
+        # Optimize the model
+        loss_value, grads = grad(model, x, y)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+        # Track progress
+        epoch_loss_avg.update_state(loss_value)  # Add current batch loss
+        epoch_accuracy.update_state(y, model(x, training=True))  # Update binary accuracy with predictions
+
+    # End epoch
+    train_loss_results.append(epoch_loss_avg.result())
+    train_accuracy_results.append(epoch_accuracy.result())
+
+    if epoch % 10 == 0:
+        print("Epoch {:04d}: Loss: {:.5f}, Mean Absolute Error: {:.5%}".format(epoch,
+                                                                    epoch_loss_avg.result(),
+                                                                    epoch_accuracy.result()))
+#
+# Test accuracy evaluation
+test_accuracy = tf.keras.metrics.MeanAbsoluteError()  # Use BinaryAccuracy for binary classification
+
+model.save('my_modelsvnjs.h5')
+
+for (x, y) in ds_test:
+    logits = model(x, training=False)
+    test_accuracy.update_state(y, predictions)
+
+print("Test set accuracy: {:.3%}".format(test_accuracy.result()))
+#
+prediction = tf.squeeze(predictions)
+#(predictions.numpy()[:5].flatten()))
+prediction = tf.cast(prediction, tf.int64)
+print(tf.stack([y,prediction],axis=1))
+
+model.save('my_modelsvnjs.h5')
